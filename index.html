@@ -151,6 +151,12 @@ footer p{max-width:85ch;margin:0 0 8px}
   .nrow{grid-template-columns:62px 1fr auto;grid-template-areas:"imp when left" "cur title title" "fp fp fp";row-gap:2px}
   .nrow .imp{grid-area:imp} .nrow .when{grid-area:when} .nrow .left{grid-area:left} .nrow .cur{grid-area:cur} .nrow .title{grid-area:title} .nrow .fp{grid-area:fp}
 }
+.bosslist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.bosslist li{display:grid;grid-template-columns:58px 66px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}
+.bosslist .bwl{color:var(--muted);font-size:12px;min-width:0;overflow-wrap:anywhere}
+.bosslist .btr{font-size:12px;font-weight:600}
+.bosslist .btr.ok{color:var(--buy)} .bosslist .btr.wait{color:var(--muted)}
+@media (max-width:460px){.bosslist li{grid-template-columns:58px 1fr;}.bosslist .bwl,.bosslist .btr{grid-column:2}}
 </style>
 </head>
 <body>
@@ -182,9 +188,10 @@ footer p{max-width:85ch;margin:0 0 8px}
       <p>FAS2B tracks every 2-hour Break of Component (BOC) across 28 currency pairs. Each BOC counts as a win for one currency and a loss for the other. The league resets every morning at <span id="leagueStart">08:00</span> East Africa Time, so you see who is strong today, not last month.</p>
     </div>
     <div class="verdict" aria-live="polite">
-      <div class="label">Boss pair today</div>
+      <div class="label" id="bossLabel">Boss pairs today</div>
       <h3 id="bossTitle">Loading ...</h3>
       <p id="bossText"></p>
+      <ul class="bosslist" id="bossList"></ul>
     </div>
   </div>
 
@@ -314,14 +321,26 @@ footer p{max-width:85ch;margin:0 0 8px}
     if (d.sample) $("updated").textContent = "Sample data (" + dayFmt.format(up) + " " + timeFmt.format(up) + "). Live scans replace it every hour.";
     $("leagueStart").textContent = d.league_start_local;
     const [nw, nl] = d.boss_rule || [3, 3];
+    const live = d.league_live !== false;
+    const day = d.league_date ? dayFmt.format(new Date(d.league_date + "T12:00:00")) : "";
+    $("bossLabel").textContent = live ? "Boss pairs today" : "Boss pairs of " + day + " (final). New league at " + d.league_start_local + " EAT";
+    const box = $("bossList"); box.textContent = "";
     if (d.boss && d.boss.length) {
-      $("bossTitle").textContent = d.boss.map(b => (b.dir > 0 ? "BUY " : "SELL ") + b.sym).join(" · ");
-      $("bossText").textContent = d.boss.map(b => b.wl + (b.trend_agrees ? ", 2H trend agrees" : ", waiting for the 2H trend")).join(". ") + ".";
+      $("bossTitle").textContent = d.boss.length + (d.boss.length === 1 ? " boss pair" : " boss pairs");
+      $("bossText").textContent = "Bought currency " + nw + "+ wins, sold currency " + nl + "+ losses since " + d.league_start_local + " EAT.";
+      d.boss.forEach(b => {
+        const li = el("li");
+        li.append(el("span", "side " + (b.dir > 0 ? "b" : "s"), b.dir > 0 ? "BUY" : "SELL"));
+        li.append(el("b", "pair", b.sym));
+        li.append(el("span", "bwl mono", b.wl));
+        li.append(el("span", "btr " + (b.trend_agrees ? "ok" : "wait"), b.trend_agrees ? "2H trend agrees" : "waiting for 2H"));
+        box.append(li);
+      });
     } else {
-      $("bossTitle").textContent = "No boss pair yet";
+      $("bossTitle").textContent = live ? "No boss pair yet" : "No boss pair";
       const c = d.closest;
-      $("bossText").textContent = "A boss needs one currency with " + nw + "+ wins against one with " + nl + "+ losses since " + d.league_start_local + "." +
-        (c ? " Closest right now: " + c.strong + " (" + c.strong_wl[0] + "W " + c.strong_wl[1] + "L) against " + c.weak + " (" + c.weak_wl[0] + "W " + c.weak_wl[1] + "L)." : " No BOC since the league started yet.");
+      $("bossText").textContent = "A boss needs one currency with " + nw + "+ wins against one with " + nl + "+ losses since " + d.league_start_local + " EAT." +
+        (c ? " Closest: " + c.strong + " (" + c.strong_wl[0] + "W " + c.strong_wl[1] + "L) against " + c.weak + " (" + c.weak_wl[0] + "W " + c.weak_wl[1] + "L)." : " No BOC since the league started yet.");
     }
   }
 
@@ -341,7 +360,7 @@ footer p{max-width:85ch;margin:0 0 8px}
       if (!list.length) { box.append(el("span", "rule", "no BOC yet")); return; }
       list.forEach(([c, w, l]) => box.append(el("span", "chip " + (w > l ? "up" : l > w ? "dn" : ""), c + "  " + w + a + " " + l + b)));
     };
-    $("todayLabel").textContent = "Today since " + d.league_start_local + " EAT (wins / losses)";
+    $("todayLabel").textContent = (d.league_live === false ? "Final league of " + (d.league_date ? dayFmt.format(new Date(d.league_date + "T12:00:00")) : "yesterday") : "Today") + " since " + d.league_start_local + " EAT (wins / losses)";
     $("nowLabel").textContent = "Last " + d.now_candles + " candles";
     chips("today", d.today, "W", "L"); chips("now", d.now, "▲", "▼");
   }
