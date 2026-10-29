@@ -451,7 +451,9 @@ footer p{max-width:85ch;margin:0 0 8px}
 
   // the app part: offline shell + "Install app" button where the browser offers it
   if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$|fas2b/i.test(location.hostname)) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(r => r.update()).catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
   }
   let promptEv = null;
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEv = e; $("install").hidden = false; });
