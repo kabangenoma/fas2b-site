@@ -185,6 +185,14 @@ footer p{max-width:85ch;margin:0 0 8px}
 .bosslist .btr{font-size:12px;font-weight:600}
 .bosslist .btr.ok{color:var(--buy)} .bosslist .btr.wait{color:var(--muted)}
 @media (max-width:460px){.bosslist li{grid-template-columns:58px 1fr;}.bosslist .bwl,.bosslist .btr{grid-column:2}}
+.bosslist .bplan{grid-column:2 / -1;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.bosslist .bplan b{color:inherit;font-weight:600}
+.siglist{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
+.siglist li{display:grid;grid-template-columns:58px 66px minmax(0,1fr);gap:4px 8px;align-items:baseline;font-size:13px}
+.siglist .sg{font-family:var(--f-display);font-weight:700;font-size:12px}
+.siglist .sd{grid-column:3;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.signote{font-size:12px;color:var(--muted);margin:8px 0 0}
+@media (max-width:460px){.siglist li{grid-template-columns:58px 1fr}.siglist .sd,.siglist .sg{grid-column:2}}
 </style>
 </head>
 <body>
@@ -204,7 +212,7 @@ footer p{max-width:85ch;margin:0 0 8px}
 <div class="strip">
   <div class="wrap">
     <span id="updated">Loading the latest scan ...</span>
-    <span>New scan every hour, Monday to Friday</span>
+    <span>New scan every 3 minutes 08:00-17:00 EAT (every 10 minutes otherwise), Monday to Friday</span>
     <span>2H chart · BLACK COMPONENT engine · 28 FX pairs, gold and indices</span>
   </div>
 </div>
@@ -220,6 +228,11 @@ footer p{max-width:85ch;margin:0 0 8px}
       <h3 id="bossTitle">Loading ...</h3>
       <p id="bossText"></p>
       <ul class="bosslist" id="bossList"></ul>
+      <div id="sigBox" hidden>
+        <div class="label" style="margin-top:14px">Entry signals today</div>
+        <ul class="siglist" id="sigList"></ul>
+        <p class="signote">From the rules (MAMA = back to the broken level, BABA = back to a yesterday line the leg reclaimed). A+ = today's POC on our side, level on yesterday's value edge, or a big-volume M3 BOC. You decide; close by 23:00.</p>
+      </div>
     </div>
   </div>
 
@@ -359,7 +372,7 @@ footer p{max-width:85ch;margin:0 0 8px}
   function renderTop(d) {
     const up = new Date(d.updated_utc);
     $("updated").textContent = "Last scan " + dayFmt.format(up) + " " + timeFmt.format(up) + " (" + ago(Date.now() - up) + ")";
-    if (d.sample) $("updated").textContent = "Sample data (" + dayFmt.format(up) + " " + timeFmt.format(up) + "). Live scans replace it every hour.";
+    if (d.sample) $("updated").textContent = "Sample data (" + dayFmt.format(up) + " " + timeFmt.format(up) + "). Live scans replace it every few minutes.";
     $("leagueStart").textContent = d.league_start_local;
     const [nw, nl] = d.boss_rule || [3, 3];
     const live = d.league_live !== false;
@@ -375,6 +388,8 @@ footer p{max-width:85ch;margin:0 0 8px}
         li.append(el("b", "pair", b.sym));
         li.append(el("span", "bwl mono", b.wl));
         li.append(el("span", "btr " + (b.trend_agrees ? "ok" : "wait"), b.trend_agrees ? "2H trend agrees" : "waiting for 2H"));
+        const info = [b.plan, b.last].filter(Boolean).join("  ·  ");
+        if (info) li.append(el("span", "bplan mono", info));
         box.append(li);
       });
     } else {
@@ -383,6 +398,21 @@ footer p{max-width:85ch;margin:0 0 8px}
       $("bossText").textContent = "A boss needs one currency with " + nw + "+ wins against one with " + nl + "+ losses since " + d.league_start_local + " EAT." +
         (c ? " Closest: " + c.strong + " (" + c.strong_wl[0] + "W " + c.strong_wl[1] + "L) against " + c.weak + " (" + c.weak_wl[0] + "W " + c.weak_wl[1] + "L)." : " No BOC since the league started yet.");
     }
+  }
+
+  function renderSignals(d) {
+    const list = d.signals || [], box = $("sigList");
+    $("sigBox").hidden = !list.length; box.textContent = "";
+    list.forEach(x => {
+      const li = el("li");
+      li.append(el("span", "side " + (x.dir > 0 ? "b" : "s"), x.dir > 0 ? "BUY" : "SELL"));
+      li.append(el("b", "pair", x.sym));
+      li.append(el("span", "sg", x.t_local + " EAT · " + (x.kind === "BABA" ? "BABA (S, 0.01 lot)" : "MAMA " + x.grade)));
+      const why = [x.poc_up === 1 ? "today's POC on our side" : "", x.y_conf ? "level on yesterday's value edge" : "",
+                   "M3 BOC volume " + x.vol_x + "x", x.leg_warn ? "⚠ went through the leg value" : ""].filter(Boolean).join(" · ");
+      li.append(el("span", "sd mono", "entry " + x.entry + " · SL " + x.sl + " (" + x.sl_pips + " p) · TP " + x.tp + " · " + why));
+      box.append(li);
+    });
   }
 
   function renderStrength(d) {
@@ -499,7 +529,7 @@ footer p{max-width:85ch;margin:0 0 8px}
 
   function render() {
     if (!DATA) return;
-    renderTop(DATA); renderStrength(DATA); renderBoard(); renderNews();
+    renderTop(DATA); renderSignals(DATA); renderStrength(DATA); renderBoard(); renderNews();
   }
 
   $("boardFilters").addEventListener("click", ev => {
@@ -533,7 +563,7 @@ footer p{max-width:85ch;margin:0 0 8px}
     }
   }
   load();
-  setInterval(load, 5 * 60000);          // new data every hour; check every 5 minutes
+  setInterval(load, 3 * 60000);          // new data every 3-10 minutes; check every 3 minutes
   setInterval(() => { if (DATA) { renderNews(); renderTop(DATA); } }, 60000);
 
   // the app part: offline shell + "Install app" button where the browser offers it
